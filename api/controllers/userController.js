@@ -1,43 +1,64 @@
-const crypto = require('crypto');  // Not 'react-native-crypto'
-const User = require("../models/user");
-const { sendVerificationEmail } = require("../utils/email");
+const { registerUser, verifyEmail, loginUser, addAddress, getUserAddresses,createOrder} = require("../utils/email");
+const User = require('../models/users'); // Adjust the path if necessary
+
+
 
 exports.registerUser = async (req, res) => {
-    try {
-        const { name, email, password } = req.body;
-        const existingUser = await User.findOne({ email });
-
-        if (existingUser) {
-            return res.status(400).json({ message: "Email already registered" });
-        }
-
-        const newUser = new User({ name, email, password });
-        newUser.verificationToken = crypto.randomBytes(20).toString("hex");
-
-        await newUser.save();
-
-        await sendVerificationEmail(newUser.email, newUser.verificationToken);
-        res.status(200).json({ message: "User registered successfully, verification email sent" });
-    } catch (error) {
-        res.status(500).json({ message: "Registration failed" });
-    }
+    const { name, email, password } = req.body;
+    const result = await registerUser(name, email, password);
+    res.status(result.status).json({ message: result.message });
 };
 
 exports.verifyEmail = async (req, res) => {
+    const token = req.params.token;
+    const result = await verifyEmail(token);
+    res.status(result.status).json({ message: result.message });
+};
+exports.loginUser = async (req, res) => {
+    const { email, password } = req.body;
+    const result = await loginUser(email, password);
+    res.status(result.status).json({ message: result.message, token: result.token });
+};
+exports.addAddress = async (req, res) => {
     try {
-        const token = req.params.token;
-        const user = await User.findOne({ verificationToken: token });
+        const { userId, address } = req.body;
+        const result = await addAddress(userId, address); // Use the addAddress from email.js
+
+        res.status(result.status).json({ message: result.message, user: result.user });
+    } catch (error) {
+        console.error("Error adding address:", error);
+        res.status(500).json({ message: "Error adding address", error: error.message });
+    }
+};
+exports.getUserAddresses = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Call the getUserAddresses function from email.js
+        const result = await getUserAddresses(userId);
+
+        // Send the result as a response
+        res.status(result.status).json(result.status === 200 ? { addresses: result.addresses } : { message: result.message });
+    } catch (error) {
+        console.error("Error in getUserAddresses controller:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+exports.getUserProfile = async (req, res) => {
+    try {
+        const userId = req.params.userId; // Get userId from request parameters
+        console.log("Received userId:", userId); // Optional: Log userId for debugging
+
+        const user = await User.findById(userId); // Find user by ID
 
         if (!user) {
-            return res.status(404).json({ message: "Invalid verification token" });
+            return res.status(404).json({ message: "User not found" });
         }
 
-        user.verified = true;
-        user.verificationToken = undefined;
-        await user.save();
-
-        res.status(200).json({ message: "Email verified successfully" });
+        res.status(200).json({ user });
     } catch (error) {
-        res.status(500).json({ message: "Email verification failed" });
+        console.error("Error retrieving user profile:", error);
+        res.status(500).json({ message: "Error retrieving the user profile" });
     }
 };
